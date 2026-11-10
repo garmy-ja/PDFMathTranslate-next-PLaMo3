@@ -1,0 +1,10 @@
+services:
+  pdfmathtranslate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    image: pdfmathtranslate-next-plamo:local
+
+    ports:
+      - "7860:7860"

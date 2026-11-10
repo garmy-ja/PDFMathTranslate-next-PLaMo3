@@ -61,6 +61,71 @@ class TranslateEngineSettingError(Exception):
         self.message = message
         super().__init__(self.message)
 
+# Insert this class immediately before the section headed
+# "# 所有翻译引擎" in pdf2zh_next/config/translate_engine_model.py.
+
+class PLaMoSettings(BaseModel):
+    """PLaMo 3 Translate served by an external LM Studio instance."""
+
+    translate_engine_type: Literal["PLaMo"] = Field(default="PLaMo")
+    # PLaMo is a translation-specialized model, not a general LLM term extractor.
+    support_llm: Literal["no"] = Field(default="no")
+    plamo_base_url: str = Field(
+        default="",
+        description="LM Studio OpenAI-compatible URL, e.g. http://192.168.1.20:1234/v1",
+    )
+    plamo_api_key: str = Field(
+        default="lm-studio",
+        description="LM Studio API key; use the token if server authentication is enabled",
+    )
+    plamo_model: str = Field(
+        default="plamo-3-translate-0.8b",
+        description="LM Studio Model Identifier",
+    )
+    plamo_timeout: str = Field(
+        default="300",
+        description="Request timeout in seconds",
+    )
+    plamo_max_tokens: str = Field(
+        default="4096",
+        description="Maximum generated tokens per translated segment",
+    )
+
+    def validate_settings(self) -> None:
+        if not self.plamo_base_url:
+            raise ValueError("LM Studio Base URL is required")
+
+        self.plamo_base_url = _clean_url(self.plamo_base_url)
+        if not self.plamo_base_url.endswith("/v1"):
+            raise ValueError(
+                "LM Studio Base URL must end with /v1, "
+                "for example http://192.168.1.20:1234/v1"
+            )
+
+        self.plamo_api_key = _clean_string(self.plamo_api_key) or "lm-studio"
+        self.plamo_model = _clean_string(self.plamo_model)
+        if not self.plamo_model:
+            raise ValueError("LM Studio Model Identifier is required")
+
+        self.plamo_timeout = _check_if_positive_float(
+            _clean_string(self.plamo_timeout), field="Timeout"
+        )
+
+        self.plamo_max_tokens = _clean_string(self.plamo_max_tokens)
+        try:
+            max_tokens = int(self.plamo_max_tokens)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Max tokens must be a positive integer") from exc
+        if max_tokens < 1:
+            raise ValueError("Max tokens must be a positive integer")
+
+
+# Register this field as secret/masked in the UI.
+GUI_PASSWORD_FIELDS.append("plamo_api_key")
+
+
+# In TRANSLATION_ENGINE_SETTING_TYPE, add this as one line before the closing ")":
+#     | PLaMoSettings
 
 ## Please add the translator configuration class below this location.
 
@@ -949,6 +1014,7 @@ class CLISettings(BaseModel):
 # 所有翻译引擎
 TRANSLATION_ENGINE_SETTING_TYPE: TypeAlias = (
     SiliconFlowFreeSettings
+    | PLaMoSettings
     | OpenAISettings
     | AliyunDashScopeSettings
     | GoogleSettings
